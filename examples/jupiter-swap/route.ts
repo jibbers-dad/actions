@@ -15,6 +15,30 @@ import {
 export const JUPITER_LOGO =
   'https://ucarecdn.com/09c80208-f27c-45dd-b716-75e1e55832c4/-/preview/1000x981/-/quality/smart/-/format/auto/';
 
+const customTokenMeta: Record<string, {
+  symbol: string,
+  name: string,
+  address: string,
+  chainId: number,
+  decimals: number,
+  logoURI: string,
+  tags: string[],
+  extensions?: {
+    coingeckoId?: string
+  }
+}> = {
+  'JIBJIB': {
+    address: 'AqRLzZMJgY8dHCDnHWgoNaM3qA5CcYpvZ95mY71DrMpQ',
+    chainId: 101,
+    decimals: 1,
+    name: 'JIBJIB',
+    symbol: 'JIBJIB',
+    logoURI: 'https://ipfs.io/ipfs/QmePhHAMmHKq49hDnkrfxYoHpSGSbbMvWYiPKxwr234c8o',
+    tags: ['custom'],
+    extensions: { coingeckoId: 'jibjib' }
+  },
+};
+
 const SWAP_AMOUNT_USD_OPTIONS = [10, 100, 1000];
 const DEFAULT_SWAP_AMOUNT_USD = 10;
 const US_DOLLAR_FORMATTING = new Intl.NumberFormat('en-US', {
@@ -24,6 +48,30 @@ const US_DOLLAR_FORMATTING = new Intl.NumberFormat('en-US', {
 });
 
 const app = new OpenAPIHono();
+
+async function lookupTokenWithFallback(token: string): Promise<any> {
+  console.log(`start`);
+  console.log(`Looking up token: ${token}`);
+  try {
+    const metadata = await jupiterApi.lookupToken(token);
+    console.log(`Metadata from Jupiter for ${token}:`, metadata);
+
+    if (metadata) {
+      console.log(`end`);
+      return metadata;
+    } else {
+      console.log(`Using custom metadata for ${token}`);
+      return customTokenMeta[token];
+    }
+  } catch (error) {
+    console.error(`Error fetching token metadata from Jupiter: ${(error as Error).message}`);
+    if (customTokenMeta[token]) {
+      console.log(`Using custom metadata for ${token}`);
+      return customTokenMeta[token];
+    }
+    return null;
+  }
+}
 
 app.openapi(
   createRoute({
@@ -49,12 +97,12 @@ app.openapi(
 
     const [inputToken, outputToken] = tokenPair.split('-');
     const [inputTokenMeta, outputTokenMeta] = await Promise.all([
-      jupiterApi.lookupToken(inputToken),
-      jupiterApi.lookupToken(outputToken),
+      lookupTokenWithFallback(inputToken),
+      lookupTokenWithFallback(outputToken),
     ]);
 
     if (!inputTokenMeta || !outputTokenMeta) {
-      return Response.json({
+      return c.json({
         icon: JUPITER_LOGO,
         label: 'Not Available',
         title: `Buy ${outputToken}`,
@@ -131,12 +179,12 @@ app.openapi(
     const { tokenPair } = c.req.param();
     const [inputToken, outputToken] = tokenPair.split('-');
     const [inputTokenMeta, outputTokenMeta] = await Promise.all([
-      jupiterApi.lookupToken(inputToken),
-      jupiterApi.lookupToken(outputToken),
+      lookupTokenWithFallback(inputToken),
+      lookupTokenWithFallback(outputToken),
     ]);
 
     if (!inputTokenMeta || !outputTokenMeta) {
-      return Response.json({
+      return c.json({
         icon: JUPITER_LOGO,
         label: 'Not Available',
         title: `Buy ${outputToken}`,
@@ -198,12 +246,12 @@ app.openapi(
 
     const [inputToken, outputToken] = tokenPair.split('-');
     const [inputTokenMeta, outputTokenMeta] = await Promise.all([
-      jupiterApi.lookupToken(inputToken),
-      jupiterApi.lookupToken(outputToken),
+      lookupTokenWithFallback(inputToken),
+      lookupTokenWithFallback(outputToken),
     ]);
 
     if (!inputTokenMeta || !outputTokenMeta) {
-      return Response.json(
+      return c.json(
         {
           message: `Token metadata not found.`,
         } satisfies ActionError,
@@ -217,7 +265,7 @@ app.openapi(
     ]);
     const tokenPriceUsd = tokenUsdPrices[inputTokenMeta.address];
     if (!tokenPriceUsd) {
-      return Response.json(
+      return c.json(
         {
           message: `Failed to get price for ${inputTokenMeta.symbol}.`,
         } satisfies ActionError,
